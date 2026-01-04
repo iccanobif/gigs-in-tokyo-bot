@@ -1,0 +1,40 @@
+name: Run Instagram watcher and store state
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # 10分毎
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check-instagram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run notifier
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          IGNORE_POST_SHORTCODES: ${{ secrets.IGNORE_POST_SHORTCODES }}
+          MAX_UPLOAD_SIZE_MB: ${{ secrets.MAX_UPLOAD_SIZE_MB }}
+          STATE_FILE: last_seen.json
+        run: python notify_instagram.py
+
+      - name: Push state file to state branch
+        env:
+          STATE_FILE: last_seen.json
+          STATE_BRANCH: state
+        run: bash ./scripts/push_state_branch.sh
