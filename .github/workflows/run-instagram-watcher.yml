@@ -1,9 +1,9 @@
 name: Run Instagram watcher and store state
 
-on:
-  schedule:
-    - cron: '*/10 * * * *'  # 10分毎
-  workflow_dispatch:
+# on:
+#  schedule:
+#    - cron: '*/10 * * * *'  # 10分毎
+#  workflow_dispatch:
 
 permissions:
   contents: write
