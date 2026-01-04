@@ -58,10 +58,24 @@ def get_latest_posts(limit: int = 5) -> List[Dict[str, str]]:
     posts = []
     try:
         for post in profile.get_posts():
+            image_url = None
+            try:
+                # カルーセル（複数メディア）の場合、最初のノードの display_url を使う
+                nodes = list(post.get_sidecar_nodes())
+                if nodes:
+                    first = nodes[0]
+                    image_url = getattr(first, 'display_url', None)
+                    if image_url is None and isinstance(first, dict):
+                        image_url = first.get('display_url')
+            except Exception:
+                # sidecar が無い・例外の場合はポスト自体の display_url/thumbnail を試す
+                image_url = getattr(post, 'display_url', None) or getattr(post, 'url', None) or getattr(post, 'thumbnail_url', None)
+
             posts.append({
                 "shortcode": post.shortcode,
                 "url": f"https://www.instagram.com/p/{post.shortcode}/",
                 "date": post.date_utc.isoformat(),
+                "image_url": image_url,
             })
             if len(posts) >= limit:
                 break
@@ -71,11 +85,14 @@ def get_latest_posts(limit: int = 5) -> List[Dict[str, str]]:
 
 
 # --- Discord 通知 -----------------------------------------------------------
-def notify_discord(message: str) -> bool:
+def notify_discord(message: str, image_url: Optional[str] = None) -> bool:
     if not WEBHOOK_URL:
         logger.error("DISCORD_WEBHOOK_URL が設定されていません。通知をスキップします。")
         return False
     payload = {"content": message}
+    # 画像が指定されていれば Embed に載せる（Discord が外部URLをフェッチできることが前提）
+    if image_url:
+        payload["embeds"] = [{"image": {"url": image_url}}]
     try:
         r = requests.post(WEBHOOK_URL, json=payload, timeout=10)
         if 200 <= r.status_code < 300:
@@ -108,9 +125,9 @@ def main() -> None:
     # 古い順に通知（同じ順序で Discord に流す）
     new_posts.reverse()
     for p in new_posts:
-        msg = f"新しいInstagram投稿: {p['url']}"
+        msg = p['url']
         logger.info("通知: %s", msg)
-        success = notify_discord(msg)
+        success = notify_discord(msg, p.get('image_url'))
         if not success:
             logger.error("通知に失敗しました。処理を中断します。")
             break
