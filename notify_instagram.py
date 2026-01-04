@@ -13,6 +13,7 @@ from typing import List, Dict, Optional
 
 import requests
 import instaloader
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -25,6 +26,24 @@ INSTAGRAM_USERNAME = os.environ.get("INSTAGRAM_USERNAME", "gigsintokyo")
 STATE_FILE = os.environ.get("STATE_FILE", "last_seen.json")
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 POST_FETCH_LIMIT = int(os.environ.get("POST_FETCH_LIMIT", "10"))
+# 無視する投稿（ショートコードのカンマ区切り。例: SHORTCODE1,SHORTCODE2）
+IGNORE_POST_SHORTCODES = os.environ.get("IGNORE_POST_SHORTCODES", "")
+
+def _parse_ignore_shortcodes(s: str) -> set:
+    items = [x.strip() for x in s.split(",") if x.strip()]
+    shortcodes = set()
+    invalid = []
+    for it in items:
+        # ショートコードは英数字とハイフン/アンダースコアを許可
+        if re.fullmatch(r"[A-Za-z0-9_-]+", it):
+            shortcodes.add(it)
+        else:
+            invalid.append(it)
+    if invalid:
+        logger.warning("無視リストに無効なショートコードが含まれています（無視されます）: %s", ", ".join(invalid))
+    return shortcodes
+
+IGNORE_SHORTCODES = _parse_ignore_shortcodes(IGNORE_POST_SHORTCODES)
 
 # --- ロギング ---------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -116,6 +135,10 @@ def main() -> None:
     for p in posts:
         if p["shortcode"] == state.get("last_shortcode"):
             break
+        # IGNORE_SHORTCODES に一致する投稿はスキップ
+        if p.get("shortcode") in IGNORE_SHORTCODES:
+            logger.info("スキップ: IGNORE_SHORTCODES に一致する投稿: %s", p["url"])
+            continue
         new_posts.append(p)
 
     if not new_posts:
