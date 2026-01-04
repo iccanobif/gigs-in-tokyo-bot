@@ -1,3 +1,4 @@
 # State and env
 last_seen.json
 .env
+*.pyc
